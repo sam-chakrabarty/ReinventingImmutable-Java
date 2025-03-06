@@ -59,10 +59,12 @@ class IndirectionNode<A, B> implements Node<A, B> {
     }
 
     /**
-     * Computes the index within the list of nodes for a given hash value based on the bitmap.
+     * Calculates the index associated with the given hash within the bitmap.
+     * If `shouldExist` is true and the hash is not present in the bitmap, the method will return -1.
      *
-     * @param hash the hash value used for computation
-     * @return the index corresponding to the given hash in the bitmap
+     * @param hash the hash value used to determine the index within the bitmap
+     * @param shouldExist a flag indicating whether the hash must exist in the bitmap
+     * @return the index corresponding to the provided hash in the bitmap, or -1 if the hash does not exist and `shouldExist` is true
      */
     int getIndex(int hash, boolean shouldExist) {
         if (shouldExist && !containsHash(hash)) return -1;

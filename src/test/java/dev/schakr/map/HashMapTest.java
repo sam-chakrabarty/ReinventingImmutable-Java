@@ -29,7 +29,7 @@ public class HashMapTest {
     }
 
     @Test
-    public void WHEN_puttingElement_THEN_shouldSucceed() {
+    public void WHEN_puttingElements_THEN_shouldSucceed() {
         HashMap<String, String> map = new HashMap<>();
         Either<Throwable, HashMap<String, String>> map1 = map.put("1", "a");
         Either<Throwable, HashMap<String, String>> map2 = map1.get().put("2", "b");
@@ -88,6 +88,40 @@ public class HashMapTest {
         Assertions.assertTrue(!map2.isEmpty());
         Assertions.assertTrue(map2.containsKey("1"));
         Assertions.assertEquals("c", map2.get("1").get());
+        Assertions.assertTrue(map2.containsKey("2"));
+        Assertions.assertEquals("b", map2.get("2").get());
+    }
+
+    @Test
+    public void WHEN_removingElements_THEN_shouldNotContainValues() {
+        var map = new HashMap<String, String>()
+                .put("1", "a")
+                .flatMap(m -> m.put("2", "b"))
+                .flatMap(m -> m.remove("1"))
+                .get();
+
+        Assertions.assertTrue(!map.isEmpty());
+        Assertions.assertFalse(map.containsKey("1"));
+        Assertions.assertTrue(map.containsKey("2"));
+        Assertions.assertEquals("b", map.get("2").get());
+    }
+
+    @Test
+    public void WHEN_removingElements_THEN_shouldPersistOldValues() {
+        var map1 = new HashMap<String, String>()
+                .put("1", "a")
+                .flatMap(m -> m.put("2", "b"))
+                .get();
+        var map2 = map1.remove("1").get();
+
+        Assertions.assertTrue(!map1.isEmpty());
+        Assertions.assertTrue(map1.containsKey("1"));
+        Assertions.assertEquals("a", map1.get("1").get());
+        Assertions.assertTrue(map1.containsKey("2"));
+        Assertions.assertEquals("b", map1.get("2").get());
+
+        Assertions.assertTrue(!map2.isEmpty());
+        Assertions.assertFalse(map2.containsKey("1"));
         Assertions.assertTrue(map2.containsKey("2"));
         Assertions.assertEquals("b", map2.get("2").get());
     }
