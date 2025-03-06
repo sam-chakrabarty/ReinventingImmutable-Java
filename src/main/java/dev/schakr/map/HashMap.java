@@ -1,7 +1,7 @@
 package dev.schakr.map;
 
+import io.vavr.collection.List;
 import io.vavr.control.Either;
-import java.util.LinkedList;
 
 public class HashMap<A, B> {
     private final IndirectionNode<A, B> root;
@@ -60,7 +60,7 @@ public class HashMap<A, B> {
      * @param nodes
      * @return
      */
-    private Node<A, B> getNode(int bitmap, int hash, LinkedList<Node<A, B>> nodes) {
+    private Node<A, B> getNode(int bitmap, int hash, List<Node<A, B>> nodes) {
         return nodes.get(getIndex(bitmap, hash));
     }
 
@@ -92,8 +92,7 @@ public class HashMap<A, B> {
         if (index < 0 || index >= node.nodes.size())
             return Either.left(new IndexOutOfBoundsException("Invalid update index: " + index));
 
-        LinkedList<Node<A, B>> updatedNodes = new LinkedList<>(node.nodes);
-        updatedNodes.set(index, child);
+        List<Node<A, B>> updatedNodes = node.nodes.update(index, child);
         return Either.right(new IndirectionNode<>(updatedNodes, (node.bitmap | (1 << hash))));
     }
 
@@ -109,8 +108,10 @@ public class HashMap<A, B> {
         if (index < 0 || index > node.nodes.size())
             return Either.left(new IndexOutOfBoundsException("Invalid insert index: " + index));
 
-        LinkedList<Node<A, B>> updatedNodes = new LinkedList<>(node.nodes);
-        updatedNodes.add(index, child);
+        List<Node<A, B>> updatedNodes = (index == node.nodes.size()) ?
+                node.nodes.append(child) :
+                node.nodes.insert(index, child);
+
         return Either.right(new IndirectionNode<>(updatedNodes, (node.bitmap | (1 << hash))));
     }
 

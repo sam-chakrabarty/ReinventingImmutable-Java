@@ -1,9 +1,10 @@
 package dev.schakr.map;
 
-import java.util.LinkedList;
+
+import io.vavr.collection.List;
 
 class IndirectionNode<A, B> implements Node<A, B> {
-    final LinkedList<Node<A, B>> nodes;
+    final List<Node<A, B>> nodes;
     final int bitmap;
 
     final static IndirectionNode<?, ?> EMPTY = new IndirectionNode<>();
@@ -14,11 +15,11 @@ class IndirectionNode<A, B> implements Node<A, B> {
     }
 
     private IndirectionNode() {
-        this.nodes = new LinkedList<>();
+        this.nodes = List.empty();
         this.bitmap = 0;
     }
 
-    IndirectionNode(LinkedList<Node<A, B>> nodes, int bitmap) {
+    IndirectionNode(List<Node<A, B>> nodes, int bitmap) {
         this.nodes = nodes;
         this.bitmap = bitmap;
     }
