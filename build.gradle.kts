@@ -10,6 +10,9 @@ repositories {
 }
 
 dependencies {
+    // Vavr
+    implementation("io.vavr:vavr:0.10.6")
+
     // Lombok
     compileOnly("org.projectlombok:lombok:1.18.36")
     annotationProcessor("org.projectlombok:lombok:1.18.36")

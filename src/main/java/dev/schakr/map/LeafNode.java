@@ -1,22 +1,38 @@
 package dev.schakr.map;
 
-import java.util.Optional;
+import io.vavr.control.Option;
 
 class LeafNode<A, B> implements Node<A, B> {
     final A key;
     final B value;
-    final Optional<LeafNode<A, B>> maybeNext;
+    Option<LeafNode<A, B>> maybeNext = Option.none();
 
     LeafNode(A a, B b) {
         this.key = a;
         this.value = b;
-        this.maybeNext = Optional.empty();
+        this.maybeNext = Option.none();
     }
 
     LeafNode(A a, B b, LeafNode<A, B> next) {
         this.key = a;
         this.value = b;
-        this.maybeNext = Optional.ofNullable(next);
+        this.maybeNext = Option.of(next);
+    }
+
+    LeafNode(A a, B b, Option<LeafNode<A, B>> maybeNext) {
+        this.key = a;
+        this.value = b;
+        this.maybeNext = maybeNext;
+    }
+
+    LeafNode(LeafNode<A, B> next) {
+        this.key = null;
+        this.value = null;
+        this.maybeNext = Option.of(next);
+    }
+
+    public LeafNode<A, B> copy() {
+        return new LeafNode<>(this.key, this.value, this.maybeNext);
     }
 
     @Override
