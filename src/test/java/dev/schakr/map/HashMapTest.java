@@ -5,8 +5,6 @@ import io.vavr.control.Either;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 
-import java.util.LinkedList;
-
 public class HashMapTest {
 
     @Test
@@ -41,5 +39,56 @@ public class HashMapTest {
         Assertions.assertTrue(!map1.isEmpty() && map1.isRight());
         Assertions.assertTrue(!map2.isEmpty() && map2.isRight());
         Assertions.assertTrue(!map3.isEmpty() && map3.isRight());
+    }
+
+    @Test
+    public void WHEN_puttingElements_THEN_shouldContainValues() {
+        var map = new HashMap<String, String>()
+                .put("1", "a")
+                .flatMap(m -> m.put("2", "b"))
+                .get();
+
+        Assertions.assertTrue(!map.isEmpty());
+        Assertions.assertTrue(map.containsKey("1"));
+        Assertions.assertEquals("a", map.get("1").get());
+        Assertions.assertTrue(map.containsKey("2"));
+        Assertions.assertEquals("b", map.get("2").get());
+    }
+
+    @Test
+    public void WHEN_overwritingElements_THEN_shouldContainValues() {
+        var map = new HashMap<String, String>()
+                .put("1", "a")
+                .flatMap(m -> m.put("2", "b"))
+                .flatMap(m -> m.put("1", "c"))
+                .get();
+
+        Assertions.assertTrue(!map.isEmpty());
+        Assertions.assertTrue(map.containsKey("1"));
+        Assertions.assertEquals("c", map.get("1").get());
+        Assertions.assertTrue(map.containsKey("2"));
+        Assertions.assertEquals("b", map.get("2").get());
+    }
+
+    @Test
+    public void WHEN_overwritingElements_THEN_shouldPersistOldValues() {
+        var map1 = new HashMap<String, String>()
+                .put("1", "a")
+                .flatMap(m -> m.put("2", "b"))
+                .get();
+
+        var map2 = map1.put("1", "c").get();
+
+        Assertions.assertTrue(!map1.isEmpty());
+        Assertions.assertTrue(map1.containsKey("1"));
+        Assertions.assertEquals("a", map1.get("1").get());
+        Assertions.assertTrue(map1.containsKey("2"));
+        Assertions.assertEquals("b", map1.get("2").get());
+
+        Assertions.assertTrue(!map2.isEmpty());
+        Assertions.assertTrue(map2.containsKey("1"));
+        Assertions.assertEquals("c", map2.get("1").get());
+        Assertions.assertTrue(map2.containsKey("2"));
+        Assertions.assertEquals("b", map2.get("2").get());
     }
 }
