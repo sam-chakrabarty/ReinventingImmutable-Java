@@ -1,5 +1,6 @@
 plugins {
     id("java")
+    id("me.champeau.jmh") version("0.6.8")
 }
 
 group = "dev.schakr"
@@ -22,6 +23,11 @@ dependencies {
     // JUnit
     testImplementation(platform("org.junit:junit-bom:5.10.0"))
     testImplementation("org.junit.jupiter:junit-jupiter")
+
+    // JMH
+    testImplementation("org.openjdk.jmh:jmh-core:1.36")
+    testAnnotationProcessor("org.openjdk.jmh:jmh-generator-annprocess:1.36")
+
 }
 
 tasks.test {
