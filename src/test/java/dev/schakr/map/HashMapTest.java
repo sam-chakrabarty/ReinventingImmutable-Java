@@ -48,7 +48,7 @@ public class HashMapTest {
                 .flatMap(m -> m.put("2", "b"))
                 .get();
 
-        Assertions.assertTrue(!map.isEmpty());
+        Assertions.assertFalse(map.isEmpty());
         Assertions.assertTrue(map.containsKey("1"));
         Assertions.assertEquals("a", map.get("1").get());
         Assertions.assertTrue(map.containsKey("2"));
@@ -63,7 +63,7 @@ public class HashMapTest {
                 .flatMap(m -> m.put("1", "c"))
                 .get();
 
-        Assertions.assertTrue(!map.isEmpty());
+        Assertions.assertFalse(map.isEmpty());
         Assertions.assertTrue(map.containsKey("1"));
         Assertions.assertEquals("c", map.get("1").get());
         Assertions.assertTrue(map.containsKey("2"));
@@ -79,13 +79,13 @@ public class HashMapTest {
 
         var map2 = map1.put("1", "c").get();
 
-        Assertions.assertTrue(!map1.isEmpty());
+        Assertions.assertFalse(map1.isEmpty());
         Assertions.assertTrue(map1.containsKey("1"));
         Assertions.assertEquals("a", map1.get("1").get());
         Assertions.assertTrue(map1.containsKey("2"));
         Assertions.assertEquals("b", map1.get("2").get());
 
-        Assertions.assertTrue(!map2.isEmpty());
+        Assertions.assertFalse(map2.isEmpty());
         Assertions.assertTrue(map2.containsKey("1"));
         Assertions.assertEquals("c", map2.get("1").get());
         Assertions.assertTrue(map2.containsKey("2"));
@@ -100,7 +100,7 @@ public class HashMapTest {
                 .flatMap(m -> m.remove("1"))
                 .get();
 
-        Assertions.assertTrue(!map.isEmpty());
+        Assertions.assertFalse(map.isEmpty());
         Assertions.assertFalse(map.containsKey("1"));
         Assertions.assertTrue(map.containsKey("2"));
         Assertions.assertEquals("b", map.get("2").get());
@@ -114,15 +114,27 @@ public class HashMapTest {
                 .get();
         var map2 = map1.remove("1").get();
 
-        Assertions.assertTrue(!map1.isEmpty());
+        Assertions.assertFalse(map1.isEmpty());
         Assertions.assertTrue(map1.containsKey("1"));
         Assertions.assertEquals("a", map1.get("1").get());
         Assertions.assertTrue(map1.containsKey("2"));
         Assertions.assertEquals("b", map1.get("2").get());
 
-        Assertions.assertTrue(!map2.isEmpty());
+        Assertions.assertFalse(map2.isEmpty());
         Assertions.assertFalse(map2.containsKey("1"));
         Assertions.assertTrue(map2.containsKey("2"));
         Assertions.assertEquals("b", map2.get("2").get());
+    }
+
+    @Test
+    public void WHEN_removingAllElements_THEN_shouldBeEmpty() {
+        var map = new HashMap<String, String>()
+                .put("1", "a")
+                .flatMap(m -> m.put("2", "b"))
+                .flatMap(m -> m.remove("1"))
+                .flatMap(m -> m.remove("2"))
+                .get();
+
+        Assertions.assertTrue(map.isEmpty());
     }
 }

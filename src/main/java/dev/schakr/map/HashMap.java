@@ -38,7 +38,7 @@ public class HashMap<A, B> {
      * @return {@code true} if the key exists in the HashMap, {@code false} otherwise
      */
     public boolean containsKey(A key) {
-        return findNode(key, 0, root).isDefined();
+        return find(key, 0, root).isDefined();
     }
 
     /**
@@ -49,7 +49,7 @@ public class HashMap<A, B> {
      *         or {@code Option.none()} if the key is not present in the HashMap
      */
     public Option<B> get(A key) {
-        return findNode(key, 0, root).map(v -> v.value);
+        return find(key, 0, root).map(v -> v.value);
     }
 
     /**
@@ -62,7 +62,7 @@ public class HashMap<A, B> {
      *         or a {@code HashMap<A, B>} with the updated key-value pair upon success
      */
     public Either<Throwable, HashMap<A, B>> put(A key, B value) {
-        return insert(key, value, 0, root).map(v -> new HashMap<>((IndirectionNode<A, B>) v));
+        return insertAtLevel(key, value, 0, root).map(v -> new HashMap<>((IndirectionNode<A, B>) v));
     }
 
     /**
@@ -76,8 +76,20 @@ public class HashMap<A, B> {
      */
     public Either<Throwable, HashMap<A, B>> remove(A key) {
         return containsKey(key) ?
-                remove(key, 0, root).map(n -> new HashMap<>((IndirectionNode<A, B>) n)) :
+                removeAtLevel(key, 0, root).map(n -> new HashMap<>((IndirectionNode<A, B>) n)) :
                 Either.right(this);
+    }
+
+    /**
+     * Computes the hash value for a given key at a specified level of the data structure.
+     * The hash value is determined by shifting and masking the hash code of the key.
+     *
+     * @param key   the key for which the hash value is to be computed
+     * @param level the current depth or level in the data structure hierarchy
+     * @return the computed hash value as an integer
+     */
+    private int hash(A key, int level) {
+        return (key.hashCode() >> (5 * level)) & 0b11111;
     }
 
     /**
@@ -90,45 +102,76 @@ public class HashMap<A, B> {
      * @return an {@code Option} containing the found {@code LeafNode} if present,
      *         or {@code Option.none()} if the key is not found or the structure is empty
      */
-    private Option<LeafNode<A, B>> findNode(A key, int level, Node<A, B> node) {
+    private Option<LeafNode<A, B>> find(A key, int level, Node<A, B> node) {
         if (node.isEmpty()) return Option.none();
-        int hash = (key.hashCode() >> (5 * level)) & 0b11111;
+        int hash = hash(key, level);
         return switch (node) {
             case IndirectionNode<A, B> indirectionNode -> indirectionNode.findNode(hash)
-                    .flatMap(n -> findNode(key, level + 1, n));
+                    .flatMap(n -> find(key, level + 1, n));
             case LeafNode<A, B> leafNode -> leafNode.find(key);
             default -> Option.none();
         };
     }
 
     /**
-     * Removes the specified key from the indirection node at the given level of the hash map hierarchy.
-     * This method traverses through the structure, attempting to locate and remove the key, and
-     * updates the node accordingly. Handles different node types, including indirection nodes,
-     * leaf nodes, and empty nodes.
+     * Inserts a key-value pair into the appropriate level of the data structure, handling node collisions
+     * and structure updates as necessary.
      *
-     * @param key the key to be removed from the hash map
-     * @param level the current depth or level in the hash map hierarchy
-     * @param node the indirection node from which the key is to be removed
-     * @return an {@code Either} containing a {@code Throwable} if an error occurs during the removal,
-     *         or an updated {@code Node<A, B>} after successfully removing the key
+     * @param key    the key to be inserted
+     * @param value  the value associated with the key
+     * @param level  the current level in the hierarchical structure where the key-value pair is to be inserted
+     * @param parent the parent node under which the key-value pair is being inserted
+     * @return an {@code Either} containing a {@code Throwable} if an error occurs during insertion,
+     *         or the updated node after insertion
+     */
+    private Either<Throwable, Node<A, B>> insertAtLevel(A key, B value, int level, IndirectionNode<A, B> parent) {
+        int hash = hash(key, level);
+
+        return parent.findNode(hash).fold(
+                () -> insertNode(parent, new LeafNode<>(key, value), hash),
+                (Node<A, B> collisionNode) -> switch (collisionNode) {
+                    case IndirectionNode<A, B> indirectionNode ->
+                            insertAtLevel(key, value, level + 1, indirectionNode)
+                                    .flatMap(a -> updateNode(parent, a, hash));
+
+                    case LeafNode<A, B> leafNode -> (level == MAX_DEPTH - 1) ?
+                            updateNode(parent, extendLeaf(leafNode, key, value), hash) :
+                            forkLeaf(leafNode, key, value, level + 1)
+                                    .flatMap(n -> updateNode(parent, n, hash));
+
+                    case Node.EmptyNode<?, ?> _ -> insertNode(parent, new LeafNode<>(key, value), hash);
+
+                    default -> Either.left(new IllegalStateException(
+                            "Encountered unexpected parent type: " + collisionNode.getClass().getSimpleName()));
+                });
+    }
+
+    /**
+     * Removes a key from the data structure starting at the specified level within the given parent node.
+     * If the key is successfully removed, returns the updated structure.
+     *
+     * @param key   the key to be removed from the data structure
+     * @param level the current level or depth in the node hierarchy
+     * @param parent the parent {@code IndirectionNode} from which the key is removed
+     * @return an {@code Either} containing a {@code Throwable} if an error occurs during the removal process,
+     *         or an updated {@code Node<A, B>} reflecting the changes upon successful removal
      */
     @SuppressWarnings("unchecked")
-    private Either<Throwable, Node<A, B>> remove(A key, int level, IndirectionNode<A, B> node) {
-        int hash = (key.hashCode() >> (5 * level)) & 0b11111;
+    private Either<Throwable, Node<A, B>> removeAtLevel(A key, int level, IndirectionNode<A, B> parent) {
+        int hash = hash(key, level);
 
-        return node.findNode(hash).fold(
-                () -> Either.right(node),
+        return parent.findNode(hash).fold(
+                () -> Either.right(parent),
                 (Node<A, B> collisionNode) -> switch (collisionNode) {
-                    case IndirectionNode<A, B> indirectionNode -> remove(key, level + 1, indirectionNode)
-                            .flatMap(a -> updateNode(node, a, hash));
+                    case IndirectionNode<A, B> indirectionNode -> removeAtLevel(key, level + 1, indirectionNode)
+                            .flatMap(a -> updateNode(parent, a, hash));
 
                     case LeafNode<A, B> leafNode -> leafNode.find(key).fold(
-                            () -> Either.<Throwable, Node<A, B>>right(leafNode),
-                            (_) ->  Either.<Throwable, Node<A, B>>right(removeLeaf(key, leafNode)))
-                            .flatMap(a -> updateNode(node, a, hash));
+                                    () -> Either.<Throwable, Node<A, B>>right(leafNode),
+                                    (_) ->  Either.<Throwable, Node<A, B>>right(removeLeaf(key, leafNode)))
+                            .flatMap(a -> updateNode(parent, a, hash));
 
-                    case Node.EmptyNode<?, ?> emptyNode -> updateNode(node, (Node<A, B>) emptyNode, hash);
+                    case Node.EmptyNode<?, ?> emptyNode -> updateNode(parent, (Node<A, B>) emptyNode, hash);
 
                     default -> Either.left(new IllegalStateException(
                             "Encountered unexpected node type: " + collisionNode.getClass().getSimpleName()));
@@ -137,113 +180,54 @@ public class HashMap<A, B> {
     }
 
     /**
-     * Removes a leaf node from the linked structure associated with the specified key.
-     * If the key matches the provided leaf node's key, it replaces the node with the next node in the chain,
-     * or returns an empty node if there is no next node.
-     * Otherwise, it updates the chain by removing the key at the matched position and preserving the rest.
+     * Updates a child node within an {@code IndirectionNode} based on the hash value. If the provided
+     * child node is empty, it removes the child from the parent node and adjusts the bitmap accordingly.
+     * Otherwise, it updates the parent with the new child node and appropriately modifies the bitmap.
      *
-     * @param key the key of the leaf node to be removed
-     * @param leafNode the current {@code LeafNode} to begin the removal process
-     * @return a {@code Node} representing the updated structure after removal of the key,
-     *         or an empty node if the key's leaf node was the only element in the chain
+     * @param parent the {@code IndirectionNode} containing the child node to be updated
+     * @param child the {@code Node} to update within the parent node
+     * @param hash the hash value used to locate the position of the child node within the parent
+     * @return an {@code Either} containing a {@code Throwable} if an error occurs (e.g., an invalid index),
+     *         or an updated {@code Node<A, B>} reflecting the changes upon success
      */
-    private Node<A, B> removeLeaf(A key, LeafNode<A, B> leafNode) {
-        if (leafNode.key.equals(key)) {
-            return leafNode.maybeNext.fold(Node::empty, Function.identity());
-        } else {
-            Option<LeafNode<A, B>> updatedNext = leafNode.maybeNext
-                    .map(n -> removeLeaf(key, n))
-                    .filter(n -> !n.isEmpty())
-                    .map(n -> (LeafNode<A, B>) n);
-
-            return new LeafNode<>(leafNode.key, leafNode.value, updatedNext);
-        }
-    }
-
-    /**
-     * Inserts a key-value pair into the given indirection node at the specified level of the hash map structure.
-     * Handles collisions by either extending, forking, or updating nodes based on the provided key, value, and level.
-     *
-     * @param key the key to be inserted
-     * @param value the value associated with the specified key
-     * @param level the current depth or level in the hash map hierarchy
-     * @param node the indirection node where the key-value pair is to be inserted
-     * @return an {@code Either} containing a {@code Throwable} if the operation fails, or an updated {@code Node<A, B>}
-     *         containing the new key-value pair upon success
-     */
-    private Either<Throwable, Node<A, B>> insert(A key, B value, int level, IndirectionNode<A, B> node) {
-        int hash = (key.hashCode() >> (5 * level)) & 0b11111;
-
-        return node.findNode(hash).fold(
-                () -> insertNode(node, new LeafNode<>(key, value), hash),
-                (Node<A, B> collisionNode) -> switch (collisionNode) {
-                    case IndirectionNode<A, B> indirectionNode -> insert(key, value, level + 1, indirectionNode)
-                            .flatMap(a -> updateNode(node, a, hash));
-
-                    case LeafNode<A, B> leafNode -> (level == MAX_DEPTH - 1) ?
-                            updateNode(node, extendLeaf(leafNode, key, value), hash) :
-                            forkLeaf(leafNode, key, value, level + 1)
-                                    .flatMap(a -> updateNode(node, a, hash));
-
-                    case Node.EmptyNode<?, ?> _ -> insertNode(node, new LeafNode<>(key, value), hash);
-
-                    default -> Either.left(new IllegalStateException(
-                            "Encountered unexpected node type: " + collisionNode.getClass().getSimpleName()));
-                });
-    }
-
-    /**
-     * Updates a node within the specified {@code IndirectionNode} by replacing or removing
-     * a child node at the index computed using the provided hash. This may result in a new
-     * {@code IndirectionNode} with an updated bitmap and list of child nodes or an empty node
-     * if all entries are removed.
-     *
-     * @param node the {@code IndirectionNode} containing the current child nodes
-     * @param child the new child node to replace the existing node at the specified index,
-     *              or an empty node to indicate removal
-     * @param hash the hash value used to calculate the index in the bitmap for updating the child node
-     * @return an {@code Either} containing a {@code Throwable} in case of an invalid index or
-     *         an updated {@code Node<A, B>} with the replaced or removed child node
-     */
-    private Either<Throwable, Node<A, B>> updateNode(IndirectionNode<A, B> node, Node<A, B> child, int hash) {
-        int index = node.getIndex(hash, true);
-        if (index < 0 || index >= node.nodes.size())
+    private Either<Throwable, Node<A, B>> updateNode(IndirectionNode<A, B> parent, Node<A, B> child, int hash) {
+        int index = parent.getIndex(hash, true);
+        if (index < 0 || index >= parent.nodes.size())
             return Either.left(new IndexOutOfBoundsException("Invalid update index: " + index));
 
         if (child.isEmpty()) {
-            List<Node<A, B>> updatedNodes = node.nodes.removeAt(index);
-            int updatedBitmap = node.bitmap & ~(1 << hash);
+            List<Node<A, B>> updatedNodes = parent.nodes.removeAt(index);
+            int updatedBitmap = parent.bitmap & ~(1 << hash);
             return (updatedBitmap == 0) ? Either.right(IndirectionNode.empty()) :
                     Either.right(new IndirectionNode<>(updatedNodes, updatedBitmap));
         } else {
-            List<Node<A, B>> updatedNodes = node.nodes.update(index, child);
-            int updatedBitmap = node.bitmap | (1 << hash);
+            List<Node<A, B>> updatedNodes = parent.nodes.update(index, child);
+            int updatedBitmap = parent.bitmap | (1 << hash);
             return Either.right(new IndirectionNode<>(updatedNodes, updatedBitmap));
         }
     }
 
     /**
-     * Inserts a child node into the specified {@code IndirectionNode} at the index computed
-     * based on the provided hash. If the hash's index is invalid (e.g., out of bounds),
-     * an error is returned. Otherwise, a new {@code IndirectionNode} containing the updated
-     * list of nodes is returned.
+     * Inserts a new child node into the specified {@code IndirectionNode} at a position determined
+     * by the provided hash value. If the hash value resolves to an out-of-bounds index, the method
+     * returns an error. Otherwise, it returns the updated parent node with the inserted child node.
      *
-     * @param node the {@code IndirectionNode} where the child node is to be inserted
-     * @param child the new child node to insert into the indirection node
-     * @param hash the hash value used to determine the index for inserting the child node
-     * @return an {@code Either} containing a {@code Throwable} if an error occurs (e.g., invalid index),
-     *         or an updated {@code Node<A, B>} with the inserted child node upon success
+     * @param parent the {@code IndirectionNode} in which the child node is to be inserted
+     * @param child the {@code Node} to insert as a child of the given parent node
+     * @param hash the hash value used to compute the position for the child node in the parent's structure
+     * @return an {@code Either} containing a {@code Throwable} if an error occurs, such as an invalid index,
+     *         or the updated {@code Node<A, B>} reflecting the successful insertion
      */
-    private Either<Throwable, Node<A, B>> insertNode(IndirectionNode<A, B> node, Node<A, B> child, int hash) {
-        int index = node.getIndex(hash, false);
-        if (index < 0 || index > node.nodes.size())
+    private Either<Throwable, Node<A, B>> insertNode(IndirectionNode<A, B> parent, Node<A, B> child, int hash) {
+        int index = parent.getIndex(hash, false);
+        if (index < 0 || index > parent.nodes.size())
             return Either.left(new IndexOutOfBoundsException("Invalid insert index: " + index));
 
-        List<Node<A, B>> updatedNodes = (index == node.nodes.size()) ?
-                node.nodes.append(child) :
-                node.nodes.insert(index, child);
+        List<Node<A, B>> updatedNodes = (index == parent.nodes.size()) ?
+                parent.nodes.append(child) :
+                parent.nodes.insert(index, child);
 
-        return Either.right(new IndirectionNode<>(updatedNodes, (node.bitmap | (1 << hash))));
+        return Either.right(new IndirectionNode<>(updatedNodes, (parent.bitmap | (1 << hash))));
     }
 
     /**
@@ -293,9 +277,32 @@ public class HashMap<A, B> {
     private Either<Throwable, Node<A, B>> forkLeaf(LeafNode<A, B> leaf, A key, B value, int level) {
         if (leaf.key.equals(key)) return Either.right(new LeafNode<>(key, value, leaf.maybeNext));
 
-        return insert(leaf.key, leaf.value, level, IndirectionNode.empty())
-                .flatMap(node -> insert(key, value, level, (IndirectionNode<A, B>) node))
-                .map(v -> (IndirectionNode<A, B>) v);
+        return insertAtLevel(leaf.key, leaf.value, level, IndirectionNode.empty())
+                .flatMap(node -> insertAtLevel(key, value, level, (IndirectionNode<A, B>) node));
+    }
+
+    /**
+     * Removes a leaf node from the linked structure associated with the specified key.
+     * If the key matches the provided leaf node's key, it replaces the node with the next node in the chain,
+     * or returns an empty node if there is no next node.
+     * Otherwise, it updates the chain by removing the key at the matched position and preserving the rest.
+     *
+     * @param key the key of the leaf node to be removed
+     * @param leafNode the current {@code LeafNode} to begin the removal process
+     * @return a {@code Node} representing the updated structure after removal of the key,
+     *         or an empty node if the key's leaf node was the only element in the chain
+     */
+    private Node<A, B> removeLeaf(A key, LeafNode<A, B> leafNode) {
+        if (leafNode.key.equals(key)) {
+            return leafNode.maybeNext.fold(Node::empty, Function.identity());
+        } else {
+            Option<LeafNode<A, B>> updatedNext = leafNode.maybeNext
+                    .map(n -> removeLeaf(key, n))
+                    .filter(n -> !n.isEmpty())
+                    .map(n -> (LeafNode<A, B>) n);
+
+            return new LeafNode<>(leafNode.key, leafNode.value, updatedNext);
+        }
     }
 
 }
