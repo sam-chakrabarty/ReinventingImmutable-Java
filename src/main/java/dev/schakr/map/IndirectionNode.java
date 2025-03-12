@@ -68,14 +68,7 @@ class IndirectionNode<A, B> implements Node<A, B> {
      */
     int getIndex(int hash, boolean shouldExist) {
         if (shouldExist && !containsHash(hash)) return -1;
-        int index = (hash == 0) ? 0 : bitmap & 1;
-        int temp = bitmap;
-        for (int i = 1; i < hash; i++) {
-            temp = temp >> 1;
-            index += temp & 1;
-        }
-
-        return index;
+        return Integer.bitCount(bitmap & ((1 << hash) - 1));
     }
 
 }
